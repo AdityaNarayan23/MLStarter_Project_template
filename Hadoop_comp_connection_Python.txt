@@ -1,0 +1,618 @@
+Install Ubuntu from Microsoft App Store
+
+Install Java 8 --> sudo apt install openjdk-8-jdk
+
+Connect to root user --> sudo su - 
+open environment variable file --> nano /etc/environment
+Write in the below line 
+JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
+
+
+#####FOLLOW steps from site: https://www.guru99.com/hbase-installation-guide.html
+
+
+Download Hbase on the local User --> wget https://apachemirror.wuchna.com/hbase/2.3.5/hbase-2.3.5-bin.tar.gz
+unzip Hbase --> tar -xvf hbase-2.3.5-bin.tar.gz
+Traverse to /home/aditya/hbase-2.3.5/conf
+nano hbase-env.sh
+write --> JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64/jre 
+save
+
+open .bashrc --> vi ~/.bashrc
+Insert into bashrc, copy paste below command and save bashrc
+export HBASE_HOME=/home/aditya/hbase-2.3.5
+export PATH=$PATH:$HBASE_HOME/bin
+
+source ~/.bashrc
+
+Create directory HBASE/hbase and HBASE/zookeeper
+
+Open hbase-site.xml file in nano editor
+Add following property 
+
+<property>
+<name>hbase.rootdir</name>
+<value>file:///home/aditya/HBASE/hbase</value>
+</property>
+
+<property>
+<name>hbase.zookeeper.property.dataDir</name>
+<value>/home/aditya/HBASE/zookeeper</value>
+</property>
+
+
+######## CONNECT TO HBASE AND START THRIFT SERVER ########
+sudo su -
+<enter password>
+cd /home/aditya/hbase-2.4.4/bin
+./start-hbase.sh
+./hbase thrift start-port:9090
+jps <-- to check which daemons are running
+./hbase shell <-- to start hbase sheel in the terminal
+exit <-- to exit from the hbase terminal
+<try connecting from python>
+<do some database work>
+./hbase-daemon.sh stop thrift
+./stop-hbase.sh
+
+create_namespace 'emp_data'
+create 'emp_data:login_data', 'hour_dist'
+
+put 'emp_data:login_data','3/2/2021','hour_dist:1-2am','0'
+
+get 'emp_data:login_data','3/2/2021', {COLUMN => 'hour_dist:1-2am'}
+
+####INSTALL DOCKER ON Ubuntu
+open terminal 
+
+check whether docker is already presentt --> docker --version
+not present 
+run --> sudo apt install docker.io
+check docker version  --> docker --version   --> Docker version 20.10.2, build 20.10.2-0ubuntu1~20.04.2
+execute --> sudo dockerd  -- to enable docker inside ubuntu
+
+create custom Dockerfile at the same path location 
+vi Dockerfile  --> enter following lines
+
+FROM python:3.8.3-slim-buster
+USER root
+RUN apt-get update
+RUN apt-get -y install gcc
+RUN pip3 install sklearn
+RUN pip3 install pandas
+RUN pip3 install numpy
+RUN pip3 install happybase
+COPY --chown=root:root ./process_HBase_emp_data.py process_HBase_emp_data.py
+COPY --chown=root:root ./run_Kmeans.sh run_Kmeans.sh
+RUN chmod +x process_HBase_emp_data.py
+CMD ["sh", "-c", "./run_Kmeans.sh"]
+
+save Dockerfile
+
+create .sh file to execute python code
+vi run_Kmeans.sh  -->  python3 ./process_HBase_emp_data.py
+
+save run_Kmeans.sh 
+
+RUN DOCKER
+
+sudo docker build . -t run_kmeans
+sudo docker run --net=host run_kmeans (while running the docker , docker daemon, thrift server and HBase daemon should be running)
+
+
+##########DOWNLOAD AND INSTALL SPARK ##################
+
+open terminal on ubuntu 
+cd ~
+wget https://apachemirror.wuchna.com/spark/spark-3.1.2/spark-3.1.2-bin-hadoop2.7.tgz
+
+spark-3.1.2-bin-hadoop2.7.tgz -- will be downloaded
+
+untar this .tgz file 
+
+tar -xvf spark-3.1.2-bin-hadoop2.7.tgz
+
+vi ~/.bashrc
+insert following lines 
+
+export SPARK_HOME=/home/aditya/spark-3.1.2-bin-hadoop2.7
+export PATH=$PATH:$SPARK_HOME/bin
+export PYSPARK_PYTHON=/usr/bin/python3.8
+export PYSPARK_DRIVER_PYTHON=/usr/bin/python3.8
+
+save the file
+
+source ~/.bashrc
+
+echo $SPARK_HOME  --> to check whether the path is set in bashrc file 
+
+now, install pyspark using pip3 
+
+pip3 install pyspark
+
+run --> spark-shell 
+to check whether spark shell opens , it will prompt scala>
+ctrl + D  --> to quit  
+
+run --> pyspark
+to check whether pyspark shell opens, it will prompt >>>
+ctrl + D --> to quit
+
+So, we have pyspark running in our shell
+
+Now, to submit any python code on spark shell, we use:
+
+spark-submit /mnt/c/Codefiles/pyspark_test.py 
+
+this will execute the python code in spark
+
+Now, we need to learn to connect HBase in python and run this on spark shell
+
+found this on internet: https://stackoverflow.com/questions/38470114/how-to-connect-hbase-and-spark-using-python 
+following the code written in the answer
+
+to submit Spark job with HBase connection, execute below command:
+
+spark-submit --packages com.hortonworks:shc:1.0.0-1.6-s_2.10 --repositories http://repo.hortonworks.com/content/groups/public/ --files /home/aditya/hbase-2.3.5/conf/hbase-site.xml /mnt/c/Codefiles/pyspark_test.py
+
+###TRYING FROM SPARK SITE
+
+from pyspark.sql import SparkSession
+
+spark = SparkSession \
+    .builder \
+    .appName("Python Spark SQL basic example") \
+    .config("spark.some.config.option", "some-value") \
+    .getOrCreate()
+
+df = spark.read.csv("/mnt/c/Codefiles/emp_login_data1.csv")
+
+export PYTHONPATH=$SPARK_HOME/python:$SPARK_HOME/python/lib/py4j-0.10.9-src.zip:$PYTHONPATH
+
+export SPARK_CLASSPATH=$HBASE_HOME
+pyspark --master yarn
+	
+df = SQLContext.read.format('org.apache.hadoop.hbase.spark') \
+    .option('hbase.table','books') \
+    .option('hbase.columns.mapping', \
+            'title STRING :key, \
+            author STRING info:author, \
+            year STRING info:year, \
+            views STRING analytics:views') \
+    .option('hbase.use.hbase.context', False) \
+    .option('hbase.config.resources', 'file:///etc/hbase/conf/hbase-site.xml') \
+    .option('hbase-push.down.column.filter', False) \
+    .load()	
+
+
+export HADOOP_CLASSPATH="$HADOOP_CLASSPATH:$HBASE_HOME/lib/*"
+
+
+spark-submit --master yarn-client --packages com.hortonworks:shc-core:1.1.1-2.1-s_2.11 --repositories http://nexus-private.hortonworks.com/nexus/content/repositories/IN-QA/ /mnt/c/Codefiles/pyspark_test.py
+spark-submit --packages com.hortonworks:shc-core:1.1.1-2.1-s_2.11 --repositories http://nexus-private.hortonworks.com/nexus/content/repositories/IN-QA/ /mnt/c/Codefiles/pyspark_test.py
+spark-submit --packages com.hortonworks:shc-core:1.1.1-1.6-s_2.10 --repositories http://nexus-private.hortonworks.com/nexus/content/repositories/IN-QA/ /mnt/c/Codefiles/pyspark_test.py
+
+spark-submit --packages com.hortonworks:shc:1.0.0-1.6-s_2.10 --repositories http://repo.hortonworks.com/content/groups/public/ --files /home/aditya/hbase2.3.5/conf/hbase-site.xml /mnt/c/Codefiles/pyspark_test.py
+spark-submit --packages com.hortonworks:shc:1.0.0-1.6-s_2.10 --repositories http://repo.hortonworks.com/content/groups/public/ --files /etc/hbase/conf/hbase-site.xml /mnt/c/Codefiles/pyspark_test.py
+
+spark-submit --master local --packages com.hortonworks:shc-core:1.1.1-1.6-s_2.10 --repositories http://repo.hortonworks.com/content/groups/public/ --files //home/aditya/hbase-2.3.5/conf/hbase-site.xml /mnt/c/Codefiles/pyspark_test.py
+
+Post on Stackoverflow:
+
+Error:
+
+Description: I am new to Spark and BigData component - HBase, I am trying to write Python code in Pyspark and connect to HBase to read data from HBase. 
+Spark version: spark-3.1.2-bin-hadoop2.7
+Python version: 3.8.5
+HBase version: hbase-2.3.5
+I have installed standalone Hbase and Spark in my local on ubuntu 20.04
+
+Please find the code below:
+from pyspark import SparkContext
+from pyspark.sql import SQLContext
+
+sc = SparkContext.getOrCreate()
+sqlc = SQLContext(sc)
+
+data_source_format = 'org.apache.spark.sql.execution.datasources.hbase'
+
+df = sc.parallelize([("1","Abby","Smith","K","3456main","Orlando","FL","45235"), ("2","Amaya","Williams","L","123Orange","Newark","NJ","27656"),
+                     ("3","Alchemy","Davis","P","Warners","Sanjose","CA","34789")]).toDF(schema=['key','firstName','lastName','middleName',
+                                                                                                 'addressLine','city','state','zipCode'])
+df.show()
+
+catalog=''.join('''{
+    "table":{"namespace":"emp_data","name":"emp_info"},
+    "rowkey":"key",
+    "columns":{
+        "key":{"cf":"rowkey","col":"key","type":"string"},
+        "fName":{"cf":"person","col":"firstName","type":"string"},
+        "lName":{"cf":"person","col":"lastName","type":"string"},
+        "mName":{"cf":"person","col":"middleName","type":"string"},
+        "addressLine":{"cf":"address","col":"addressLine","type":"string"},
+        "city":{"cf":"address","col":"city","type":"string"},
+        "state":{"cf":"address","col":"state","type":"string"},
+        "zipCode":{"cf":"address","col":"zipCode","type":"string"}
+        }
+    }'''.split())
+
+#Writing
+print("Writing into HBase")
+df.write\
+    .options(catalog=catalog)\
+    .format(data_source_format)\
+    .save()
+
+#Reading
+print("Readig from HBase")
+df = sqlc.read\
+.options(catalog=catalog)\
+.format(data_source_format)\
+.load()
+
+print("Program Ends")
+
+
+##########LEARNING GIT AND COMMITTING CODE TO BITBUCKET ##################
+
+Create Repository in BitBucket - xdr-ueba-user_activity_profiling
+
+Open Ubuntu Terminal 
+Navigate to path --> C:\Users\anarayan\Repositories
+Clone Repository on local - C:\Users\anarayan\Repositories --> git clone https://stash.intranet.qualys.com/scm/~anarayan/xdr-ueba-user_activity_profiling.git
+(the repository is empty as of now)
+Add code file -> User_Activity_Profiling.py in the local folder -> C:\Users\anarayan\Repositories\xdr-ueba-user_activity_profiling_training
+on Terminal ->
+	git status --> this will show the status of the commits and untracked file, we will see 1 untracked file User_Activity_Profiling.py
+	git add User_Activity_Profiling.py --> this will copy codefile from local to git staging area
+	git status 
+	git commit -m "<commit message>" 
+	git push (During push, you might be prompted with username and password)
+	
+
+##########RUNNING CMDS ON P22 HADOOP CLUSTER - NAME NODE ##################
+open putty
+enter following: 
+Hostname: anarayan@hadpdlnn01.p22.eng.sjc01.qualys.com
+port: 22
+click -> open
+enter password on terminal (windows password)
+It will login into p22 Hadoop Cluster Name node 01 : (check naming convention: anarayan@hadpdlnn01) hadp - hadoop, dl - datalake, nn- namenode, 01 - ID
+
+File structure: Default home path --> /home/anarayan/  
+
+Check if python is installed:
+python -V
+Python 2.7.5 - python 2.7.5 - older version :(
+
+python 
+>> import pandas  -- No module named pandas 
+>> exit()
+Need to install basic python libraries (numpy and pandas)
+
+check whether pip is present --> 
+python -m pip --version
+No module named pip
+
+Need to install pip 
+Then we need to install Pandas and Numpy
+
+----
+To run Pyspark -> 	sudo su spark
+					pyspark 
+
+pyspark session will open, now we can run our python code here
+
+exit() --> to exit from pyspark session
+exit --> to exit from spark user
+exit --> to exit from anarayan user and close the terminal
+
+-----------
+
+file emp_login_data1.csv is present in local /home/anarayan/
+
+to read from spark user, we need to put this file on hdfs
+sudo su hdfs --> to login from hdfs user 
+create anarayan directory on hdfs --> hdfs dfs -mkdir /anarayan
+move file from local to hdfs --> hdfs dfs -put /home/anarayan/emp_login_data1.csv /anarayan 
+Also, if required change permissions of the file in local so that move command can be executed. 
+
+execute --> hdfs dfs - ls /anarayan 
+to view the file
+
+now, exit from the user hdfs --> exit 
+
+enter into spark user --> sudo su spark
+pyspark 
+and now try reading the file using spark.read 
+
+------
+P22 Hadoop cluster has python installed - Python 2.7, We need to get this upgraded to python 3.6.8 - done by punit (XDR-3730)
+
+Install Dependent libraries in Python3 
+
+Copy .whl file from local into p22 - list of pkgs:
+
+pytz-2020.1-py2.py3-none-any.whl 
+six-1.15.0-py2.py3-none-any.whl
+python_dateutil-2.8.1-py2.py3-none-any.whl 
+numpy-1.19.1-cp37-cp37m-win_amd64.whl
+pandas-1.1.0-cp37-cp37m-win_amd64.whl 
+threadpoolctl-2.1.0-py3-none-any.whl 
+joblib-0.16.0-py3-none-any.whl 
+scipy-1.5.2-cp37-cp37m-win_amd64.whl
+scikit_learn-0.23.2-cp37-cp37m-win_amd64.whl
+
+Create a requirements.txt file lisitng all the wheel files. 
+
+Give permissions - chmod 775 requirements.txt (give permission to all the whl files as well)
+
+Login as root user -- run below command
+
+pip3 install -r requirements.txt   -- not working
+
+--------------------------
+Create Virtual Environment for python and install dependent libraries
+
+python3 -m venv project_env
+
+ls -ltr  -- check the venv created 
+
+source project_env/bin/activate  -- activate venv
+
+(project_env) [eng_sjc01_p22  anarayan@hadpdlnn01 ~]$ which python
+Parenthesis defines the venv is activated, check command which python to confirm that same base python version is used in venv 
+
+(project_env) [eng_sjc01_p22  anarayan@hadpdlnn01 ~]$ which python3
+in venv, python has 3.6 version only, therefore - python n python3 both can be used
+
+(project_env) [eng_sjc01_p22  anarayan@hadpdlnn01 ~]$ python -V   -- to check python version
+
+(project_env) [eng_sjc01_p22  anarayan@hadpdlnn01 ~]$ pip list -- list all the packages installed in this venv 
+
+Copy all the whl files in the requirements.txt (here req.txt)
+
+pytz-2021.1-py2.py3-none-any.whl
+six-1.16.0-py2.py3-none-any.whl
+python_dateutil-2.8.1-py2.py3-none-any.whl
+numpy-1.18.1-cp36-cp36m-manylinux1_x86_64.whl
+pandas-1.1.5-cp36-cp36m-manylinux1_x86_64.whl
+threadpoolctl-2.1.0-py3-none-any.whl
+joblib-1.0.1-py3-none-any.whl
+scipy-1.5.0-cp36-cp36m-manylinux1_x86_64.whl
+scikit_learn-0.24.2-cp36-cp36m-manylinux1_x86_64.whl
+
+(project_env) [eng_sjc01_p22  anarayan@hadpdlnn01 ~]$ pip install -r req.txt -- run pip install to download all the packages needed for the code run
+
+(project_env) [eng_sjc01_p22  anarayan@hadpdlnn01 ~]$ pip list  -- check all the packages installed. 
+
+(project_env) [eng_sjc01_p22  anarayan@hadpdlnn01 ~]$ pip freeze  -- to list all the packages with the version details 
+
+(project_env) [eng_sjc01_p22  anarayan@hadpdlnn01 ~]$ pip freeze > req1.txt -- to write the packages into a requirements.txt file (here req1.txt)
+
+(project_env) [eng_sjc01_p22  anarayan@hadpdlnn01 ~]$ cat req1.txt  -- to check the requirements.txt file contents
+
+#### Deactivate the Virtual Environment: 
+(project_env) [eng_sjc01_p22  anarayan@hadpdlnn01 ~]$ deactivate
+
+#### Delete the Virtual Environment: 
+(project_env) [eng_sjc01_p22  anarayan@hadpdlnn01 ~]$ rm -rf project_env/ 
+
+--------------------------------------------------------
+NOW WE SHOULD CREATE venv IN A python_project - this folder should have all the whl files, req.txt file - so that we can create venv and 
+install all the libraries
+
+[eng_sjc01_p22  anarayan@hadpdlnn01 ~]$ mkdir python_project
+[eng_sjc01_p22  anarayan@hadpdlnn01 ~]$ chmod 775 python_project/
+
+move all the req.txt, req1.txt and whl files into this folder
+
+[eng_sjc01_p22  anarayan@hadpdlnn01 ~]$ python3 -m venv python_project/venv   -- create virtual env venv in the python_project folder
+[eng_sjc01_p22  anarayan@hadpdlnn01 ~]$ source python_project/venv/bin/activate  -- to activate the venv 
+
+(venv) [eng_sjc01_p22  anarayan@hadpdlnn01 ~]$ cd python_project/
+(venv) [eng_sjc01_p22  anarayan@hadpdlnn01 python_project]$ ls -ltr
+
+(venv) [eng_sjc01_p22  anarayan@hadpdlnn01 python_project]$ pip install -r req.txt
+
+(venv) [eng_sjc01_p22  anarayan@hadpdlnn01 python_project]$ pip list
+(venv) [eng_sjc01_p22  anarayan@hadpdlnn01 python_project]$ pip freeze > req1.txt
+
+once done till here, please come back to dir - python_project and change permission on this dir to reflect on all the files and dirs 
+
+(venv) [eng_sjc01_p22  anarayan@hadpdlnn01 ~]$ pwd
+/home/anarayan
+
+(venv) [eng_sjc01_p22  anarayan@hadpdlnn01 ~]$ chmod -R 775 python_project/
+
+(venv) [eng_sjc01_p22  anarayan@hadpdlnn01 ~]$ python3 python_project/python_test.py
+
+output: Hello Python
+
+(venv) [eng_sjc01_p22  anarayan@hadpdlnn01 ~]$ deactivate venv
+
+#NOW I HAVE TO INSTALL PYSPARK AND EXECUTE MY PYSPARK code
+
+[eng_sjc01_p22  anarayan@hadpdlnn01 ~]$ source python_project/venv/bin/activate
+
+download pyspark tar.zg file from internet, move it inside python_project on p22 cluster
+(venv) [eng_sjc01_p22  anarayan@hadpdlnn01 python_project]$ mv pyspark-3.1.2.tar.gz python_project/
+
+(venv) [eng_sjc01_p22  anarayan@hadpdlnn01 python_project]$ chmod 775 pyspark-3.1.2.tar.gz
+
+(venv) [eng_sjc01_p22  anarayan@hadpdlnn01 python_project]$ tar -xvf pyspark-3.1.2.tar.gz
+
+(venv) [eng_sjc01_p22  anarayan@hadpdlnn01 python_project]$ pushd /home/anarayan/python_project/pyspark-3.1.2/
+
+(venv) [eng_sjc01_p22  anarayan@hadpdlnn01 python_project]$ python setup.py install
+
+(venv) [eng_sjc01_p22  anarayan@hadpdlnn01 python_project]$ spark-submit pyspark_Kmeans.py
+
+#Faced Error for file not found: fixed by putting the file into the path and updating the path in the .py file 
+(venv) [eng_sjc01_p22  anarayan@hadpdlnn01 python_project]$ mv emp_login_data1.csv python_project/
+
+(venv) [eng_sjc01_p22  anarayan@hadpdlnn01 python_project]$ pip freeze > req1.txt
+
+(venv) [eng_sjc01_p22  anarayan@hadpdlnn01 python_project]$ venv-pack -o venv.tar.gz
+
+this is done on my local 
+(pyspark_venv) aditya@131783-T480:~/pyspark_project/pyspark_venv/bin$ ln -sfn /bin/python3 python3
+------------------------
+
+Creating virtual environment in my local
+
+# to install virtualenv
+sudo apt-get update  
+sudo apt-get install python3-virtualenv
+
+python3 -m virtualenv pyspark_project/venv
+source /home/aditya/pyspark_project/venv/bin/activate
+
+zip -r pyspark_venv.zip pyspark_venv
+
+
+000033340621 - consumer #  -- june  
+
+---------------------------
+#this seems working
+spark-submit --archives /home/anarayan/python_project/venv.tar.gz /home/anarayan/python_project/pyspark_Kmeans.py --master yarn --deploy-mode cluster
+#need to put hdfs file  - it worked until pyspark code, and failed at the line - import numpy as np
+#not working - numpy module not found error, looks like unable to untar the tar.gz file.
+
+spark-submit spark.archives /home/anarayan/python_project/venv.tar.gz /home/anarayan/python_project/pyspark_Kmeans.py --master yarn --deploy-mode cluster
+Error: Cannot load main class from JAR file:/home/anarayan/spark.archives
+
+spark-submit spark.yarn.dist.archives /home/anarayan/python_project/venv.tar.gz /home/anarayan/python_project/pyspark_Kmeans.py --master yarn --deploy-mode cluster
+
+PYSPARK_PYTHON=./venv/bin/python \
+spark-submit \
+--conf spark.yarn.appMasterEnv.PYSPARK_PYTHON=./venv/bin/python \
+--master yarn \
+--deploy-mode cluster \
+--archives venv.tar.gz#venv \
+pyspark_Kmeans.py
+
+PYSPARK_PYTHON=/home/anarayan/python_project/venv/bin/python spark-submit --conf spark.yarn.appMasterEnv.PYSPARK_PYTHON=/home/anarayan/python_project/venv/bin/python --master yarn --deploy-mode cluster --archives /home/anarayan/python_project/venv.tar.gz#venv /home/anarayan/python_project/pyspark_Kmeans.py
+
+
+PYSPARK_PYTHON=/home/spark/pyspark_project/pyspark_venv/bin/python spark-submit --conf spark.yarn.appMasterEnv.PYSPARK_PYTHON=/home/spark/pyspark_project/pyspark_venv/bin/python --master yarn --deploy-mode cluster --archives /home/spark/pyspark_project/pyspark_venv.tar.gz#pyspark_venv /home/spark/pyspark_project/pyspark_test.py
+
+spark-submit --master yarn-client --conf spark.pyspark.virtualenv.enabled=true  --conf spark.pyspark.virtualenv.type=native --conf spark.pyspark.virtualenv.requirements=/home/spark/pyspark_project/requirements.txt --conf spark.pyspark.virtualenv.bin.path=/home/spark/pyspark_project/pyspark_venv --conf spark.pyspark.python=/usr/bin/python3 pyspark_test.py
+
+PYSPARK_DRIVER_PYTHON=python \
+PYSPARK_PYTHON=/home/spark/pyspark_project/pyspark_venv/bin/python \
+pyspark \
+--conf spark.yarn.appMasterEnv.PYSPARK_PYTHON=/home/spark/pyspark_project/pyspark_venv/bin/python \
+--master yarn \
+--deploy-mode client \
+--archives pyspark_venv.tar.gz#pyspark_venv
+
+PYSPARK_DRIVER_PYTHON=python \
+PYSPARK_PYTHON=/home/spark/pyspark_project/pyspark_venv/bin/python \
+spark-submit \
+--conf spark.yarn.appMasterEnv.PYSPARK_PYTHON=/home/spark/pyspark_project/pyspark_venv/bin/python \
+--master yarn \
+--deploy-mode client \
+--archives /home/spark/pyspark_project/pyspark_venv.tar.gz#pyspark_venv \
+/home/spark/pyspark_project/pyspark_test.py
+
+
+spark-submit \
+--conf spark.yarn.appMasterEnv.PYSPARK_PYTHON=/home/spark/pyspark_project/pyspark_venv/bin/python \
+--master local \
+--deploy-mode client \
+--archives /home/spark/pyspark_project/pyspark_venv.tar.gz#pyspark_venv \
+/home/spark/pyspark_project/pyspark_test.py
+
+
+PYSPARK_PYTHON=/home/spark/pyspark_project/pyspark_venv/bin/python \
+spark-submit --conf spark.yarn.appMasterEnv.PYSPARK_PYTHON=/home/spark/pyspark_project/pyspark_venv/bin/python \
+--master yarn \
+--deploy-mode client \
+--archives /home/spark/pyspark_project/pyspark_venv.zip#pyspark_venv \
+/home/spark/pyspark_project/pyspark_test.py
+
+-------------------------------------------------------------------------
+spark-submit --master yarn --deploy-mode cluster --conf "spark.yarn.maxAppAttempts=1" --archives /home/anarayan/pyspark_venv.tar.gz#environment /home/anarayan/main.py
+
+spark-submit --master yarn --deploy-mode cluster --conf "spark.yarn.maxAppAttempts=1" --archives /home/anarayan/pyspark_test_project/pyspark_project_venv.tar.gz#environment /home/anarayan/pyspark_test_project/main.py
+
+spark-submit --master yarn --deploy-mode cluster --conf "spark.yarn.maxAppAttempts=1" --archives /home/anarayan/pyspark_test/pyspark_test.tar.gz#environment /home/anarayan/main.py
+
+
+-------------------------------------------------------------------------
+
+[eng_sjc01_p22  anarayan@hadpdlnn01 python_project]$ python3 -m venv python_project_venv
+[eng_sjc01_p22  anarayan@hadpdlnn01 python_project]$ source python_project_venv/bin/activate
+(python_project_venv) [eng_sjc01_p22  anarayan@hadpdlnn01 python_project]$ pip install -r req.txt
+(python_project_venv) [eng_sjc01_p22  anarayan@hadpdlnn01 python_project]$ pip freeze > requirements.txt
+(python_project_venv) [eng_sjc01_p22  anarayan@hadpdlnn01 python_project]$ venv-pack -o python_project_venv.tar.gz 
+(python_project_venv) [eng_sjc01_p22  anarayan@hadpdlnn01 ~]$ deactivate
+[eng_sjc01_p22  anarayan@hadpdlnn01 ~]$ chmod 775 -R python_project/
+
+The venv packaging is done
+
+Now we need to set PYSPARK_PYTHON in Ambari
+
+login to Ambari
+Spark2 --> Configs --> Advanced spark2-env --> Set as -->
+
+# Python3 config for PySpark
+export PYSPARK_PYTHON=./environment/bin/python3
+
+Save and Exit
+
+Now we can execute the code to check the output, we will do spark-submit from spark user
+
+[eng_sjc01_p22  anarayan@hadpdlnn01 ~]$ sudo su spark
+
+[eng_sjc01_p22  spark@hadpdlnn01 anarayan]$ spark-submit --master yarn \
+--deploy-mode cluster --conf "spark.yarn.maxAppAttempts=1" \
+--archives /home/anarayan/python_project/python_project_venv.tar.gz#environment /home/anarayan/main.py
+
+This has run successfully --
+Check here:  http://hadpdlnn01.p22.eng.sjc01.qualys.com:8088/cluster/apps
+
+ID: application_1626843943814_0139
+
+Output: 
+:
+:
+Sum: 195
+Count: 11
+3/2= 1.5
+
+Now, I will try to run another code to check whether pandas as imported correctly. 
+
+[eng_sjc01_p22  spark@hadpdlnn01 anarayan]$ spark-submit --master yarn \
+--deploy-mode cluster --conf "spark.yarn.maxAppAttempts=1" \
+--archives /home/anarayan/python_project/python_project_venv.tar.gz#environment /home/anarayan/python_project/python_test.py
+
+This code also ran with the following output: 
+Hello Python
+Numpy Version : 1.18.1
+Pandas Version : 1.1.5
+SKlearn Version : 0.24.2
+
+However, the status of the code is FAILED, as i didnt initialize spark context
+
+Now, I will try to run the final KMeans code.
+
+[eng_sjc01_p22  spark@hadpdlnn01 anarayan]$ spark-submit --master yarn \
+--deploy-mode cluster --conf "spark.yarn.maxAppAttempts=1" \
+--archives /home/anarayan/python_project/python_project_venv.tar.gz#environment /home/anarayan/python_project/pyspark_Kmeans.py
+
+Code ran successfully -- 
+Output: 
+0.6114486600066072
+Max Sil Score: 0.6114486600066072 for the best cluster: 3
+{0: array([-3.86539762, -0.83836359]), 1: array([ 3.03867696, -0.88527198]), 2: array([-0.1675545 ,  1.81685361])}
+{1: 12, 2: 10}
+final_df :
+    Cluster  Max_dist  ...  Cluster_density  Threshold
+0        1  0.982562  ...               12   1.310083
+1        2  2.307685  ...               10   3.848544
+
+[2 rows x 7 columns]
+
+--------------------------------------------------------------------------------------------------
