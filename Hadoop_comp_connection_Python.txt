@@ -259,7 +259,7 @@ Create Repository in BitBucket - xdr-ueba-user_activity_profiling
 
 Open Ubuntu Terminal 
 Navigate to path --> C:\Users\anarayan\Repositories
-Clone Repository on local - C:\Users\anarayan\Repositories --> git clone https://stash.intranet.qualys.com/scm/~anarayan/xdr-ueba-user_activity_profiling.git
+Clone Repository on local - C:\Users\anarayan\Repositories --> git clone https://stash.intranet.q*****.com/scm/~anarayan/xdr-ueba-user_activity_profiling.git
 (the repository is empty as of now)
 Add code file -> User_Activity_Profiling.py in the local folder -> C:\Users\anarayan\Repositories\xdr-ueba-user_activity_profiling_training
 on Terminal ->
@@ -273,7 +273,7 @@ on Terminal ->
 ##########RUNNING CMDS ON P22 HADOOP CLUSTER - NAME NODE ##################
 open putty
 enter following: 
-Hostname: anarayan@hadpdlnn01.p22.eng.sjc01.qualys.com
+Hostname: anarayan@hadpdlnn01.p22.eng.sjc01.q*****.com
 port: 22
 click -> open
 enter password on terminal (windows password)
@@ -571,7 +571,7 @@ Now we can execute the code to check the output, we will do spark-submit from sp
 --archives /home/anarayan/python_project/python_project_venv.tar.gz#environment /home/anarayan/main.py
 
 This has run successfully --
-Check here:  http://hadpdlnn01.p22.eng.sjc01.qualys.com:8088/cluster/apps
+Check here:  http://hadpdlnn01.p22.eng.sjc01.q*****.com:8088/cluster/apps
 
 ID: application_1626843943814_0139
 
